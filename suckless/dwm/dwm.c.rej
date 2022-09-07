@@ -1,15 +1,62 @@
 --- dwm.c
 +++ dwm.c
-@@ -40,6 +40,12 @@
- #include <X11/extensions/Xinerama.h>
- #endif /* XINERAMA */
- #include <X11/Xft/Xft.h>
-+#include <X11/Xlib-xcb.h>
-+#include <xcb/res.h>
-+#ifdef __OpenBSD__
-+#include <sys/sysctl.h>
-+#include <kvm.h>
-+#endif /* __OpenBSD */
+@@ -111,24 +111,32 @@ typedef struct {
+ 	void (*arrange)(Monitor *);
+ } Layout;
  
- #include "drw.h"
- #include "util.h"
++#define MAXTABS 50
++
+ struct Monitor {
+ 	char ltsymbol[16];
+ 	float mfact;
+ 	int nmaster;
+ 	int num;
+ 	int by;               /* bar geometry */
++	int ty;               /* tab bar geometry */
+ 	int mx, my, mw, mh;   /* screen size */
+ 	int wx, wy, ww, wh;   /* window area  */
+ 	unsigned int seltags;
+ 	unsigned int sellt;
+ 	unsigned int tagset[2];
+ 	int showbar;
++	int showtab;
+ 	int topbar;
++	int toptab;
+ 	Client *clients;
+ 	Client *sel;
+ 	Client *stack;
+ 	Monitor *next;
+ 	Window barwin;
++	Window tabwin;
++	int ntabs;
++	int tab_widths[MAXTABS];
+ 	const Layout *lt[2];
+ };
+ 
+@@ -243,6 +253,7 @@ static char stext[256];
+ static int screen;
+ static int sw, sh;           /* X display screen geometry width, height */
+ static int bh, blw = 0;      /* bar geometry */
++static int th = 0;           /* tab bar geometry */
+ static int lrpad;            /* sum of left and right padding for text */
+ static int (*xerrorxlib)(Display *, XErrorEvent *);
+ static unsigned int numlockmask = 0;
+@@ -661,7 +693,10 @@ createmon(void)
+ 	m->mfact = mfact;
+ 	m->nmaster = nmaster;
+ 	m->showbar = showbar;
++	m->showtab = showtab;
+ 	m->topbar = topbar;
++	m->toptab = toptab;
++	m->ntabs = 0;
+ 	m->lt[0] = &layouts[0];
+ 	m->lt[1] = &layouts[1 % LENGTH(layouts)];
+ 	strncpy(m->ltsymbol, layouts[0].symbol, sizeof m->ltsymbol);
+@@ -1639,6 +1743,7 @@ setup(void)
+ 		die("no fonts could be loaded.");
+ 	lrpad = drw->fonts->h;
+ 	bh = drw->fonts->h + 2;
++	th = bh;
+ 	updategeom();
+ 	/* init atoms */
+ 	utf8string = XInternAtom(dpy, "UTF8_STRING", False);
